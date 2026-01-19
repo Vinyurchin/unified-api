@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Análisis Médico IA</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .shell {
+      width: 100%;
+      max-width: 900px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-weight: 700;
+      font-size: 32px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle { color: #999; font-size: 14px; margin: 0; }
+    .mode-switch {
+      display: flex;
+      gap: 12px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .pill {
+      flex: 1;
+      min-width: 200px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 2px solid #ddd;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+      background: white;
+    }
+    .pill input { margin-right: 8px; }
+    .pill.active {
+      border-color: #667eea;
+      background: linear-gradient(135deg, #667eea15, #764ba215);
+      font-weight: 600;
+    }
+    .pill-label { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .pill-icon { font-size: 20px; }
+    .pill-desc { color: #999; font-size: 12px; }
+    .dropzone {
+      margin: 20px 0;
+      border: 2px dashed #bbb;
+      border-radius: 14px;
+      padding: 40px;
+      text-align: center;
+      color: #666;
+      transition: all 0.2s ease;
+      background: #fafafa;
+    }
+    .dropzone.dragover {
+      border-color: #667eea;
+      background: rgba(102, 126, 234, 0.05);
+    }
+    button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      width: 100%;
+      margin-top: 12px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .result {
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+      background: #f5f7ff;
+      display: none;
+    }
+    .result.show { display: block; }
+    .error {
+      color: #d32f2f;
+      margin-top: 12px;
+      padding: 12px;
+      background: #ffebee;
+      border-radius: 8px;
+      border-left: 4px solid #d32f2f;
+      display: none;
+    }
+    .error.show { display: block; }
+    img.preview {
+      max-width: 100%;
+      border-radius: 10px;
+      margin-top: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .pdf-frame {
+      width: 100%;
+      height: 500px;
+      border: none;
+      border-radius: 10px;
+      background: white;
+      margin-top: 12px;
+    }
+    .emotion-pool {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .emotion-item {
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      border: 2px solid #e0e0e0;
+    }
+    .emotion-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .emotion-emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+    .emotion-name { font-weight: 600; color: #333; font-size: 12px; }
+    .emotion-prob {
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+    }
+    .status { color: #667eea; font-size: 13px; margin-top: 8px; font-style: italic; }
+    .meta { color: #999; font-size: 12px; margin-top: 8px; }
+    .download-btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-top: 8px;
+      margin-right: 8px;
+      transition: all 0.2s;
+    }
+    .download-btn:hover { opacity: 0.9; transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <h1>🔬 Análisis Médico IA</h1>
+      <p class="subtitle">Detección de Emociones y Tumores Cerebrales</p>
+    </div>
+
+    <div class="mode-switch" id="mode-switch">
+      <label class="pill active">
+        <div class="pill-label">
+          <span class="pill-icon">🎭</span>
+          <div>
+            <div>Emociones</div>
+            <div class="pill-desc">Análisis facial</div>
+          </div>
+        </div>
+        <input type="radio" name="mode" value="emotion" checked />
+      </label>
+      <label class="pill">
+        <div class="pill-label">
+          <span class="pill-icon">🧠</span>
+          <div>
+            <div>MRI</div>
+            <div class="pill-desc">Tumor detector</div>
+          </div>
+        </div>
+        <input type="radio" name="mode" value="tumor" />
+      </label>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <p id="dz-text">📁 Arrastra una imagen o haz clic para elegir</p>
+      <input type="file" id="file-input" accept="image/*" style="display:none" />
+    </div>
+
+    <button id="send-btn">Analizar</button>
+    <div class="status" id="status"></div>
+    <div class="error" id="error"></div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    const EMOJIS = {
+      enojado: "😠",
+      disgustado: "🤢",
+      miedo: "😨",
+      feliz: "😄",
+      triste: "😢",
+      sorprendido: "😲",
+      neutral: "😐",
+    };
+
+    const modeSwitch = document.getElementById("mode-switch");
+    const pills = modeSwitch.querySelectorAll(".pill");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("file-input");
+    const sendBtn = document.getElementById("send-btn");
+    const errorEl = document.getElementById("error");
+    const resultEl = document.getElementById("result");
+    const statusEl = document.getElementById("status");
+
+    let currentFile = null;
+
+    pills.forEach((pill) => {
+      pill.addEventListener("click", () => {
+        pills.forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+        pill.querySelector("input").checked = true;
+        resultEl.innerHTML = "";
+        resultEl.style.display = "none";
+        errorEl.textContent = "";
+        errorEl.classList.remove("show");
+      });
+    });
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () =>
+      dropzone.classList.remove("dragover")
+    );
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) setFile(file);
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) setFile(file);
+    });
+
+    function setFile(file) {
+      currentFile = file;
+      document.getElementById("dz-text").textContent = `✅ ${file.name} listo`;
+    }
+
+    async function handleSubmit() {
+      errorEl.textContent = "";
+      resultEl.style.display = "none";
+      resultEl.innerHTML = "";
+      statusEl.textContent = "";
+
+      if (!currentFile) {
+        errorEl.textContent = "Selecciona una imagen primero.";
+        errorEl.classList.add("show");
+        return;
+      }
+
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      const fd = new FormData();
+      const endpoint =
+        mode === "emotion" ? "/emotion/upload" : "/tumor/predict";
+      fd.append(mode === "emotion" ? "file" : "data", currentFile);
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Procesando...";
+      statusEl.textContent =
+        mode === "emotion"
+          ? "Detectando emociones..."
+          : "Analizando MRI (puede tomar 30-60 segundos)...";
+
+      try {
+        const res = await fetch(endpoint, { method: "POST", body: fd });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || "Error en la petición");
+        }
+
+        if (mode === "emotion") {
+          const data = await res.json();
+          const emotions = data.emotions || {};
+          const maxEmotion = data.dominant_emotion;
+
+          let emotionsHtml =
+            '<h3 style="margin: 0 0 12px; color: #333;">📊 Piscina de Emociones</h3><div class="emotion-pool">';
+
+          Object.entries(emotions).forEach(([emotion, prob]) => {
+            const emoji = EMOJIS[emotion] || "😐";
+            const percent = Math.round(prob * 100);
+            emotionsHtml += `
+              <div class="emotion-item" onclick="alert('${emoji} ${emotion.toUpperCase()}: ${percent}%')">
+                <span class="emotion-emoji">${emoji}</span>
+                <div class="emotion-name">${emotion}</div>
+                <div class="emotion-prob">${percent}%</div>
+              </div>
+            `;
+          });
+
+          emotionsHtml += "</div>";
+          emotionsHtml += `
+            <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 12px; text-align: center;">
+              <div style="font-size: 32px; margin-bottom: 8px;">${EMOJIS[maxEmotion] || "😐"}</div>
+              <strong style="color: #667eea; font-size: 16px;">Emoción: ${maxEmotion.toUpperCase()}</strong>
+            </div>
+            <div style="margin-top: 12px;"><strong style="color: #333;">Análisis Facial</strong>
+            <img src="data:image/png;base64,${data.image_with_points_base64}" alt="Análisis" class="preview">
+            </div>
+          `;
+
+          if (data.drive_id) {
+            emotionsHtml += `<div class="meta">📂 Subido a Drive</div>`;
+          }
+
+          resultEl.innerHTML = emotionsHtml;
+        } else {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "resultado.pdf";
+          link.className = "download-btn";
+          link.textContent = "📥 Descargar PDF";
+
+          const link2 = document.createElement("a");
+          link2.href = url;
+          link2.target = "_blank";
+          link2.className = "download-btn";
+          link2.textContent = "👁️ Ver PDF";
+
+          const frame = document.createElement("iframe");
+          frame.className = "pdf-frame";
+          frame.src = url;
+
+          resultEl.innerHTML = "<h3 style='margin: 0 0 12px; color: #333;'>✅ Análisis Completado</h3>";
+          resultEl.appendChild(link);
+          resultEl.appendChild(link2);
+          resultEl.appendChild(frame);
+        }
+
+        resultEl.style.display = "block";
+        statusEl.textContent = "";
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = err.message || "Error inesperado.";
+        errorEl.classList.add("show");
+        statusEl.textContent = "";
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Analizar";
+      }
+    }
+
+    sendBtn.addEventListener("click", handleSubmit);
+  </script>
+</body>
+</html>
+
