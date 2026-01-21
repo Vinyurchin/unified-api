@@ -6,11 +6,11 @@ gunicorn
 numpy
 python-dotenv
 Pillow
-tensorflow
+tensorflow-cpu
 gdown
 reportlab
-fer
 pandas
 scikit-learn
 scipy
+mtcnn
 
