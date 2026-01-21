@@ -12,5 +12,4 @@ reportlab
 pandas
 scikit-learn
 scipy
-mtcnn
 

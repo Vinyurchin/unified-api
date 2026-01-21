@@ -22,11 +22,6 @@ try:
 except Exception:
     cv2 = None
 
-try:
-    from mtcnn import MTCNN
-except Exception:
-    MTCNN = None
-
 # Environment setup
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 load_dotenv()
@@ -120,32 +115,30 @@ def pil_to_bytes_io(pil_img):
 
 
 def detectar_emociones_con_modelo(imagen_pil):
-    """Detección de rostros con MTCNN - devuelve detección básica sin emociones"""
-    if MTCNN is None:
+    """Detección de rostros con OpenCV - devuelve emociones simuladas"""
+    if cv2 is None:
         return None
 
-    global _fer_detector
-    if _fer_detector is None:
-        _fer_detector = MTCNN()
-
-    # MTCNN solo detecta rostros, no emociones
-    # Retornamos una emoción "neutra" como placeholder
+    # Detectar rostro con OpenCV
     image_array = np.array(imagen_pil.convert('RGB'))
-    detecciones = _fer_detector.detect_faces(image_array)
+    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
     
-    if not detecciones:
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    
+    if len(faces) == 0:
         return None
 
-    # Simulamos respuesta de emociones neutral
+    # Retornar emociones simuladas (distribución neutral)
     emocion_es = "neutral"
     emociones_es = {
-        "enojado": 0.1,
+        "enojado": 0.08,
         "disgustado": 0.05,
-        "miedo": 0.05,
-        "feliz": 0.2,
-        "triste": 0.1,
-        "sorprendido": 0.15,
-        "neutral": 0.35
+        "miedo": 0.06,
+        "feliz": 0.22,
+        "triste": 0.09,
+        "sorprendido": 0.12,
+        "neutral": 0.38
     }
     return emocion_es, emociones_es
 
