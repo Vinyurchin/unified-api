@@ -9,7 +9,7 @@
     body {
       margin: 0;
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #A8E6CF 0%, #7FC8A9 100%);
       min-height: 100vh;
       padding: 20px;
       display: flex;
@@ -34,7 +34,7 @@
       margin: 0 0 8px;
       font-weight: 700;
       font-size: 32px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #7FC8A9, #5FB895);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -61,8 +61,8 @@
     }
     .pill input { margin-right: 8px; }
     .pill.active {
-      border-color: #667eea;
-      background: linear-gradient(135deg, #667eea15, #764ba215);
+      border-color: #7FC8A9;
+      background: linear-gradient(135deg, #A8E6CF25, #7FC8A925);
       font-weight: 600;
     }
     .pill-label { display: flex; align-items: center; gap: 8px; flex: 1; }
@@ -79,11 +79,11 @@
       background: #fafafa;
     }
     .dropzone.dragover {
-      border-color: #667eea;
-      background: rgba(102, 126, 234, 0.05);
+      border-color: #7FC8A9;
+      background: rgba(127, 200, 169, 0.05);
     }
     button {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #7FC8A9, #5FB895);
       color: white;
       border: none;
       padding: 14px 24px;
@@ -93,11 +93,11 @@
       width: 100%;
       margin-top: 12px;
       transition: all 0.2s ease;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 15px rgba(127, 200, 169, 0.3);
     }
     button:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 6px 20px rgba(127, 200, 169, 0.4);
     }
     button:active { transform: translateY(0); }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -105,8 +105,8 @@
       margin-top: 20px;
       padding: 20px;
       border-radius: 12px;
-      border-left: 4px solid #667eea;
-      background: #f5f7ff;
+      border-left: 4px solid #7FC8A9;
+      background: #f0faf7;
       display: none;
     }
     .result.show { display: block; }
@@ -160,12 +160,12 @@
       color: #999;
       margin-top: 4px;
     }
-    .status { color: #667eea; font-size: 13px; margin-top: 8px; font-style: italic; }
+    .status { color: #7FC8A9; font-size: 13px; margin-top: 8px; font-style: italic; }
     .meta { color: #999; font-size: 12px; margin-top: 8px; }
     .download-btn {
       display: inline-block;
       padding: 10px 20px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: linear-gradient(135deg, #7FC8A9, #5FB895);
       color: white;
       text-decoration: none;
       border-radius: 8px;
@@ -314,26 +314,12 @@
           const emotions = data.emotions || {};
           const maxEmotion = data.dominant_emotion;
 
-          let emotionsHtml =
-            '<h3 style="margin: 0 0 12px; color: #333;">📊 Piscina de Emociones</h3><div class="emotion-pool">';
-
-          Object.entries(emotions).forEach(([emotion, prob]) => {
-            const emoji = EMOJIS[emotion] || "😐";
-            const percent = Math.round(prob * 100);
-            emotionsHtml += `
-              <div class="emotion-item" onclick="alert('${emoji} ${emotion.toUpperCase()}: ${percent}%')">
-                <span class="emotion-emoji">${emoji}</span>
-                <div class="emotion-name">${emotion}</div>
-                <div class="emotion-prob">${percent}%</div>
-              </div>
-            `;
-          });
-
-          emotionsHtml += "</div>";
-          emotionsHtml += `
+          const emoji = EMOJIS[maxEmotion] || "😐";
+          const titulo = maxEmotion ? maxEmotion.toUpperCase() : "NO DETECTADA";
+          let emotionsHtml = `
             <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 12px; text-align: center;">
-              <div style="font-size: 32px; margin-bottom: 8px;">${EMOJIS[maxEmotion] || "😐"}</div>
-              <strong style="color: #667eea; font-size: 16px;">Emoción: ${maxEmotion.toUpperCase()}</strong>
+              <div style="font-size: 32px; margin-bottom: 8px;">${emoji}</div>
+              <strong style="color: #7FC8A9; font-size: 16px;">Emoción: ${titulo}</strong>
             </div>
             <div style="margin-top: 12px;"><strong style="color: #333;">Análisis Facial</strong>
             <img src="data:image/png;base64,${data.image_with_points_base64}" alt="Análisis" class="preview">

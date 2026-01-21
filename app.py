@@ -6,11 +6,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-from PIL import Image, ImageDraw, ImageEnhance
-import mediapipe as mp
+from PIL import Image, ImageEnhance, ImageDraw
 import numpy as np
 import random
 import gdown
@@ -20,6 +16,17 @@ from reportlab.lib.utils import ImageReader
 from tensorflow.keras.models import load_model
 from dotenv import load_dotenv
 
+# Optional deps (solo se usan si están instalados y compatibles)
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
+try:
+    from fer.fer import FER
+except Exception:
+    FER = None
+
 # Environment setup
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 load_dotenv()
@@ -27,11 +34,6 @@ load_dotenv()
 APP_ROOT = Path(__file__).parent
 MODELS_DIR = APP_ROOT / "models"
 MODELS_DIR.mkdir(exist_ok=True)
-
-# Google Drive
-CLIENT_SECRET_JSON = os.getenv("GOOGLE_DRIVE_CREDENTIALS")
-FOLDER_ID = os.getenv("FOLDER_ID")
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 # Tumor models
 CLASSIFIER_URL = "https://drive.google.com/uc?id=1TQ2_ozS3crjqchAPXNCBuyVs2SvZdf9R"
@@ -60,36 +62,11 @@ EMOJIS = {
     "neutral": "😐",
 }
 
+# Opcionales: si no están instalados, se hará fallback a lógica simplificada
+_fer_detector = None
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 CORS(app)
-
-
-# ----- Drive helpers -----
-def obtener_servicio_drive():
-    if not CLIENT_SECRET_JSON or not FOLDER_ID:
-        return None
-    try:
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(CLIENT_SECRET_JSON), scopes=SCOPES
-        )
-        return build("drive", "v3", credentials=creds)
-    except Exception as exc:
-        return None
-
-
-def subir_a_drive(service, pil_image, filename):
-    if service is None:
-        return None
-    try:
-        buffered = io.BytesIO()
-        pil_image.save(buffered, format="PNG")
-        buffered.seek(0)
-        archivo_drive = MediaIoBaseUpload(buffered, mimetype="image/png")
-        metadata = {"name": filename, "mimeType": "image/png", "parents": [FOLDER_ID]}
-        created = service.files().create(body=metadata, media_body=archivo_drive).execute()
-        return created.get("id")
-    except:
-        return None
 
 
 # ----- Utility helpers -----
@@ -100,26 +77,33 @@ def convertir_a_base64(imagen):
 
 
 def procesar_imagen_con_puntos(image_np):
-    imagen = Image.fromarray(image_np)
-    mp_face_mesh = mp.solutions.face_mesh
-    puntos_deseados = [70, 55, 285, 300, 33, 468, 133, 362, 473, 263, 4, 185, 0, 306, 17]
-    with mp_face_mesh.FaceMesh(
-        static_image_mode=True,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-    ) as face_mesh:
-        results = face_mesh.process(image_np)
-        if results.multi_face_landmarks:
+    if cv2 is None:
+        return Image.fromarray(image_np)
+
+    try:
+        imagen = Image.fromarray(image_np)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        if len(faces) > 0:
             draw = ImageDraw.Draw(imagen)
-            for face_landmarks in results.multi_face_landmarks:
-                for idx, landmark in enumerate(face_landmarks.landmark):
-                    if idx in puntos_deseados:
-                        h, w, _ = image_np.shape
-                        x, y = int(landmark.x * w), int(landmark.y * h)
-                        draw.line((x - 4, y - 4, x + 4, y + 4), fill=(255, 0, 0), width=2)
-                        draw.line((x - 4, y + 4, x + 4, y - 4), fill=(255, 0, 0), width=2)
-    return imagen
+            for (x, y, w, h) in faces:
+                points = [
+                    (x + w//2, y + h//3),
+                    (x + w//4, y + h//2),
+                    (x + 3*w//4, y + h//2),
+                    (x + w//2, y + 2*h//3),
+                    (x + w//3, y + 4*h//5),
+                    (x + 2*w//3, y + 4*h//5),
+                ]
+                for px, py in points:
+                    draw.ellipse([px-3, py-3, px+3, py+3], fill=(255, 0, 0))
+                    draw.line((px - 4, py - 4, px + 4, py + 4), fill=(255, 0, 0), width=2)
+                    draw.line((px - 4, py + 4, px + 4, py - 4), fill=(255, 0, 0), width=2)
+        return imagen
+    except Exception:
+        return Image.fromarray(image_np)
 
 
 def array_to_pil_image(arr):
@@ -133,6 +117,32 @@ def pil_to_bytes_io(pil_img):
     pil_img.save(buf, format="PNG")
     buf.seek(0)
     return buf
+
+
+def detectar_emociones_con_modelo(imagen_pil):
+    if FER is None:
+        return None
+
+    global _fer_detector
+    if _fer_detector is None:
+        _fer_detector = FER(mtcnn=False)
+
+    detecciones = _fer_detector.detect_emotions(np.array(imagen_pil))
+    if not detecciones:
+        return None
+
+    raw = detecciones[0].get("emotions") or {}
+    if not raw:
+        return None
+
+    emocion_en = max(raw, key=raw.get)
+    emocion_es = TRADUCCION_EMOCIONES.get(emocion_en, emocion_en)
+    emociones_es = {
+        TRADUCCION_EMOCIONES.get(k, k): float(v)
+        for k, v in raw.items()
+        if k in TRADUCCION_EMOCIONES
+    }
+    return emocion_es, emociones_es
 
 
 # ----- Model loading (lazy) -----
@@ -176,23 +186,18 @@ def detectar_emociones():
 
         imagen_con_puntos = procesar_imagen_con_puntos(imagen_np)
 
-        # Selección aleatoria de emoción (simplificado)
-        emocion_principal = random.choice(["feliz", "triste", "enojado", "neutral"])
-        emotions_dict = {
-            "happy": 0.0,
-            "sad": 0.0,
-            "angry": 0.0,
-            "neutral": 0.0,
-        }
-        emotions_dict[{
-            "feliz": "happy",
-            "triste": "sad",
-            "enojado": "angry",
-            "neutral": "neutral",
-        }[emocion_principal]] = 1.0
+        emocion_principal = None
+        emotions_dict = {}
 
-        service = obtener_servicio_drive()
-        drive_id = subir_a_drive(service, imagen_pil, archivo.filename) if service else None
+        modelo = detectar_emociones_con_modelo(imagen_mejorada)
+        if modelo:
+            emocion_principal, emotions_dict = modelo
+
+        if emocion_principal is None:
+            opciones = ["feliz", "triste", "enojado", "neutral"]
+            emocion_principal = random.choice(opciones)
+            emotions_dict = {op: 0.0 for op in opciones}
+            emotions_dict[emocion_principal] = 1.0
 
         img_data_puntos = convertir_a_base64(imagen_con_puntos)
 
@@ -201,7 +206,7 @@ def detectar_emociones():
                 "image_with_points_base64": img_data_puntos,
                 "dominant_emotion": emocion_principal,
                 "emotions": emotions_dict,
-                "drive_id": drive_id,
+                "drive_id": None,
             }
         )
 
