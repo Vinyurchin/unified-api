@@ -303,26 +303,34 @@ def ensure_models():
     if _resnet_model is None:
         print("[Model] Cargando tumor_classifier.h5...")
         try:
-            from tensorflow.keras.utils import custom_object_scope
-            with custom_object_scope({}):
-                _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
-        except Exception as e:
-            print(f"[Model] Error al cargar con custom_object_scope: {e}")
+            # Intenta cargar directamente
             _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+        except Exception as e:
+            print(f"[Model] Error inicial: {e}")
+            try:
+                # Fallback: cargar sin compilar y registrar custom objects
+                import keras
+                with keras.utils.custom_object_scope({"DTypePolicy": object}):
+                    _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+            except Exception as e2:
+                print(f"[Model] Error con custom_object_scope: {e2}")
+                raise
     
     if _unet_model is None:
         print("[Model] Cargando segmentacion.keras...")
         try:
-            from tensorflow.keras.utils import custom_object_scope
-            with custom_object_scope({}):
-                _unet_model = load_model(SEGMENTATION_PATH, compile=False)
+            # Intenta cargar directamente
+            _unet_model = load_model(SEGMENTATION_PATH, compile=False)
         except Exception as e:
-            print(f"[Model] Error al cargar con custom_object_scope: {e}")
+            print(f"[Model] Error inicial: {e}")
             try:
-                _unet_model = load_model(SEGMENTATION_PATH, compile=False, safe_mode=False)
+                # Fallback: cargar sin compilar y registrar custom objects
+                import keras
+                with keras.utils.custom_object_scope({"DTypePolicy": object}):
+                    _unet_model = load_model(SEGMENTATION_PATH, compile=False)
             except Exception as e2:
-                print(f"[Model] Error con safe_mode=False: {e2}")
-                _unet_model = load_model(SEGMENTATION_PATH, compile=False)
+                print(f"[Model] Error con custom_object_scope: {e2}")
+                raise
 
 
 # ----- Routes -----
