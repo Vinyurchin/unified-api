@@ -298,9 +298,15 @@ def ensure_models():
         gdown.download(SEGMENTATION_URL, str(SEGMENTATION_PATH), quiet=False)
     patch_input_layer_batch_shape()
     if _resnet_model is None:
-        _resnet_model = load_model(CLASSIFIER_PATH)
+        print("[Model] Cargando tumor_classifier.h5...")
+        _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
     if _unet_model is None:
-        _unet_model = load_model(SEGMENTATION_PATH)
+        print("[Model] Cargando segmentacion.keras...")
+        try:
+            _unet_model = load_model(SEGMENTATION_PATH, compile=False, safe_mode=False)
+        except Exception as e:
+            print(f"[Model] Error con safe_mode=False, intentando sin ese parámetro: {e}")
+            _unet_model = load_model(SEGMENTATION_PATH, compile=False)
 
 
 # ----- Routes -----
