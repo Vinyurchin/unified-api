@@ -1,18 +1,17 @@
-Flask==2.0.1
+Flask==2.3.0
 flask-cors
-opencv-python-headless==4.6.0.66
+opencv-python-headless
 mediapipe
-Werkzeug==2.0.3
-matplotlib==3.4.3
-numpy>=1.22,<1.24
-gunicorn==20.1.0
+Werkzeug==2.3.0
+numpy>=1.22
+gunicorn==21.0.0
 requests
 python-dotenv
 fer
 imageio
 imageio-ffmpeg
 Pillow
-tensorflow-cpu
+tensorflow-cpu==2.13.0
 gdown
 reportlab
 
