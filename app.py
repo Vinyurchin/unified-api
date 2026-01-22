@@ -12,6 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import InputLayer
 from dotenv import load_dotenv
 
 # Optional deps (solo se usan si están instalados y compatibles)
@@ -265,6 +266,28 @@ def pil_to_bytes_io(pil_img):
 # ----- Model loading (lazy) -----
 _resnet_model = None
 _unet_model = None
+_input_layer_patched = False
+
+
+def patch_input_layer_batch_shape():
+    """Permite cargar modelos antiguos que usan 'batch_shape' en InputLayer."""
+    global _input_layer_patched
+    if _input_layer_patched:
+        return
+
+    try:
+        original_init = InputLayer.__init__
+
+        def patched_init(self, *args, **kwargs):
+            if "batch_shape" in kwargs and "batch_input_shape" not in kwargs:
+                kwargs["batch_input_shape"] = kwargs.pop("batch_shape")
+            return original_init(self, *args, **kwargs)
+
+        InputLayer.__init__ = patched_init
+        _input_layer_patched = True
+        print("[Patch] InputLayer admite 'batch_shape' -> 'batch_input_shape'")
+    except Exception as exc:
+        print(f"[Patch] No se pudo parchear InputLayer: {exc}")
 
 
 def ensure_models():
@@ -273,6 +296,7 @@ def ensure_models():
         gdown.download(CLASSIFIER_URL, str(CLASSIFIER_PATH), quiet=False)
     if not SEGMENTATION_PATH.exists():
         gdown.download(SEGMENTATION_URL, str(SEGMENTATION_PATH), quiet=False)
+    patch_input_layer_batch_shape()
     if _resnet_model is None:
         _resnet_model = load_model(CLASSIFIER_PATH)
     if _unet_model is None:
