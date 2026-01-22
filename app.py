@@ -1,6 +1,5 @@
 import base64
 import io
-import json
 import os
 from pathlib import Path
 
@@ -8,7 +7,6 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageEnhance, ImageDraw
 import numpy as np
-import random
 import gdown
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -21,6 +19,18 @@ try:
     import cv2
 except Exception:
     cv2 = None
+
+try:
+    import mediapipe as mp
+except Exception:
+    mp = None
+
+try:
+    from fer.fer import FER
+    _fer_detector_instance = None
+except Exception:
+    FER = None
+    _fer_detector_instance = None
 
 # Environment setup
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
@@ -57,9 +67,6 @@ EMOJIS = {
     "neutral": "😐",
 }
 
-# Opcionales: si no están instalados, se hará fallback a lógica simplificada
-_fer_detector = None
-
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 CORS(app)
 
@@ -71,7 +78,36 @@ def convertir_a_base64(imagen):
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
-def procesar_imagen_con_puntos(image_np):
+def procesar_imagen_con_puntos_mediapipe(image_np):
+    """Procesa la imagen y añade puntos faciales usando MediaPipe (más preciso)."""
+    if mp is None:
+        return Image.fromarray(image_np)
+    
+    try:
+        imagen = Image.fromarray(image_np)
+        mp_face_mesh = mp.solutions.face_mesh
+        puntos_deseados = [70, 55, 285, 300, 33, 468, 133, 362, 473, 263, 4, 185, 0, 306, 17]
+        
+        with mp_face_mesh.FaceMesh(
+            static_image_mode=True, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5
+        ) as face_mesh:
+            results = face_mesh.process(image_np)
+            if results.multi_face_landmarks:
+                draw = ImageDraw.Draw(imagen)
+                for face_landmarks in results.multi_face_landmarks:
+                    for idx, landmark in enumerate(face_landmarks.landmark):
+                        if idx in puntos_deseados:
+                            h, w, _ = image_np.shape
+                            x, y = int(landmark.x * w), int(landmark.y * h)
+                            draw.line((x - 4, y - 4, x + 4, y + 4), fill=(255, 0, 0), width=2)
+                            draw.line((x - 4, y + 4, x + 4, y - 4), fill=(255, 0, 0), width=2)
+        return imagen
+    except Exception:
+        return Image.fromarray(image_np)
+
+
+def procesar_imagen_con_puntos_opencv(image_np):
+    """Fallback: Procesa la imagen con OpenCV (menos preciso)."""
     if cv2 is None:
         return Image.fromarray(image_np)
 
@@ -101,6 +137,117 @@ def procesar_imagen_con_puntos(image_np):
         return Image.fromarray(image_np)
 
 
+def procesar_imagen_con_puntos(image_np):
+    """Intenta MediaPipe primero, luego fallback a OpenCV."""
+    # Intentar con MediaPipe (más preciso)
+    if mp is not None:
+        resultado = procesar_imagen_con_puntos_mediapipe(image_np)
+        if resultado:
+            return resultado
+    
+    # Fallback a OpenCV
+    return procesar_imagen_con_puntos_opencv(image_np)
+
+
+def get_fer_detector():
+    """Obtiene el detector FER de forma lazy y segura."""
+    global _fer_detector_instance
+    if FER is None:
+        return None
+    
+    if _fer_detector_instance is None:
+        try:
+            _fer_detector_instance = FER(mtcnn=False)
+        except Exception as e:
+            print(f"Advertencia: Error al inicializar FER: {e}")
+            return None
+    
+    return _fer_detector_instance
+
+
+def detectar_emociones_con_fer(imagen_pil, imagen_np):
+    """Intenta detectar emociones con FER - usa detección real."""
+    detector = get_fer_detector()
+    if detector is None:
+        print("[FER] Detector no disponible")
+        return None
+    
+    try:
+        # FER funciona mejor con RGB en formato uint8
+        if imagen_np.dtype != np.uint8:
+            if imagen_np.max() <= 1.0:
+                imagen_np = (imagen_np * 255).astype(np.uint8)
+            else:
+                imagen_np = imagen_np.astype(np.uint8)
+        
+        print(f"[FER] Analizando imagen: shape={imagen_np.shape}, dtype={imagen_np.dtype}")
+        
+        # Detectar emociones
+        emociones = detector.detect_emotions(imagen_np)
+        
+        if not emociones or len(emociones) == 0:
+            print("[FER] No se detectaron rostros")
+            return None
+        
+        # Obtener la primera cara detectada
+        rostro_data = emociones[0]
+        emociones_detectadas = rostro_data.get("emotions", {})
+        
+        if not emociones_detectadas:
+            print("[FER] Rostro detectado pero sin emociones")
+            return None
+        
+        print(f"[FER] Emociones detectadas: {emociones_detectadas}")
+        
+        # Obtener emoción principal
+        emocion_principal_en = max(emociones_detectadas, key=emociones_detectadas.get)
+        emocion_principal = TRADUCCION_EMOCIONES.get(emocion_principal_en, emocion_principal_en)
+        
+        # Convertir emociones al español
+        emociones_es = {
+            TRADUCCION_EMOCIONES.get(emocion_en, emocion_en): round(float(valor), 4)
+            for emocion_en, valor in emociones_detectadas.items()
+        }
+        
+        print(f"[FER] ✓ Emoción principal: {emocion_principal}")
+        return emocion_principal, emociones_es
+    
+    except Exception as e:
+        print(f"[FER] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def detectar_emociones_fallback_opencv(imagen_np):
+    """Fallback: Detección con OpenCV + emociones simuladas."""
+    if cv2 is None:
+        return None
+
+    try:
+        gray = cv2.cvtColor(imagen_np, cv2.COLOR_RGB2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+        
+        if len(faces) == 0:
+            return None
+
+        # Retornar emociones simuladas (distribución neutral)
+        return "neutral", {
+            "enojado": 0.08,
+            "disgustado": 0.05,
+            "miedo": 0.06,
+            "feliz": 0.22,
+            "triste": 0.09,
+            "sorprendido": 0.12,
+            "neutral": 0.38
+        }
+    except Exception as e:
+        print(f"[OpenCV] Error: {e}")
+        return None
+
+
+
 def array_to_pil_image(arr):
     if arr.ndim == 3 and arr.shape[-1] == 1:
         arr = arr.squeeze(axis=-1)
@@ -113,34 +260,6 @@ def pil_to_bytes_io(pil_img):
     buf.seek(0)
     return buf
 
-
-def detectar_emociones_con_modelo(imagen_pil):
-    """Detección de rostros con OpenCV - devuelve emociones simuladas"""
-    if cv2 is None:
-        return None
-
-    # Detectar rostro con OpenCV
-    image_array = np.array(imagen_pil.convert('RGB'))
-    gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
-    
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    
-    if len(faces) == 0:
-        return None
-
-    # Retornar emociones simuladas (distribución neutral)
-    emocion_es = "neutral"
-    emociones_es = {
-        "enojado": 0.08,
-        "disgustado": 0.05,
-        "miedo": 0.06,
-        "feliz": 0.22,
-        "triste": 0.09,
-        "sorprendido": 0.12,
-        "neutral": 0.38
-    }
-    return emocion_es, emociones_es
 
 
 # ----- Model loading (lazy) -----
@@ -175,41 +294,77 @@ def detectar_emociones():
         return jsonify({"error": "No se cargó ninguna imagen"}), 400
 
     try:
+        # Leer imagen original
         imagen_pil = Image.open(archivo).convert("RGB")
-        imagen_pil = imagen_pil.resize((300, 300))
+        # NO reducir tanto - mantener más detalles para FER
+        imagen_pil = imagen_pil.resize((640, 640))
         imagen_np = np.array(imagen_pil)
 
-        imagen_mejorada = ImageEnhance.Contrast(imagen_pil).enhance(1.5)
-        imagen_mejorada = ImageEnhance.Sharpness(imagen_mejorada).enhance(2.0)
+        # Mejorar imagen para mejor detección
+        imagen_mejorada = ImageEnhance.Contrast(imagen_pil).enhance(1.2)
+        imagen_mejorada = ImageEnhance.Sharpness(imagen_mejorada).enhance(1.5)
+        imagen_mejorada_np = np.array(imagen_mejorada)
 
-        imagen_con_puntos = procesar_imagen_con_puntos(imagen_np)
+        print(f"[ENDPOINT] Procesando imagen de tamaño {imagen_np.shape}")
 
         emocion_principal = None
         emotions_dict = {}
+        metodo_usado = "desconocido"
 
-        modelo = detectar_emociones_con_modelo(imagen_mejorada)
-        if modelo:
-            emocion_principal, emotions_dict = modelo
+        # Intentar FER primero (más preciso)
+        print("[ENDPOINT] Intentando detección con FER...")
+        resultado_fer = detectar_emociones_con_fer(imagen_pil, imagen_mejorada_np)
+        
+        if resultado_fer:
+            print("[ENDPOINT] ✓ FER detectó emociones correctamente")
+            emocion_principal, emotions_dict = resultado_fer
+            metodo_usado = "FER"
+        else:
+            # Fallback a OpenCV
+            print("[ENDPOINT] FER sin resultados, intentando OpenCV...")
+            resultado_fallback = detectar_emociones_fallback_opencv(imagen_mejorada_np)
+            
+            if resultado_fallback:
+                print("[ENDPOINT] ✓ OpenCV detectó rostro")
+                emocion_principal, emotions_dict = resultado_fallback
+                metodo_usado = "OpenCV+Simulado"
+            else:
+                print("[ENDPOINT] ✗ No se detectó rostro")
+                return jsonify({
+                    "error": "No se detectó rostro en la imagen. Intenta con:",
+                    "sugerencias": [
+                        "Una imagen más clara",
+                        "Mejor iluminación",
+                        "Rostro mirando hacia la cámara",
+                        "Sin obstáculos en el rostro"
+                    ]
+                }), 400
 
-        if emocion_principal is None:
-            opciones = ["feliz", "triste", "enojado", "neutral"]
-            emocion_principal = random.choice(opciones)
-            emotions_dict = {op: 0.0 for op in opciones}
-            emotions_dict[emocion_principal] = 1.0
+        # Si llegamos aquí, tenemos detección exitosa
+        print(f"[ENDPOINT] ✓ Detección exitosa con {metodo_usado}: {emocion_principal}")
+        
+        # Procesar puntos faciales para visualización (imagen pequeña para render)
+        imagen_display = imagen_pil.resize((300, 300))
+        imagen_display_np = np.array(imagen_display)
+        imagen_con_puntos = procesar_imagen_con_puntos(imagen_display_np)
 
         img_data_puntos = convertir_a_base64(imagen_con_puntos)
 
-        return jsonify(
-            {
-                "image_with_points_base64": img_data_puntos,
-                "dominant_emotion": emocion_principal,
-                "emotions": emotions_dict,
-                "drive_id": None,
-            }
-        )
+        response_data = {
+            "image_with_points_base64": img_data_puntos,
+            "dominant_emotion": emocion_principal,
+            "emotions": emotions_dict,
+            "detection_method": metodo_usado
+        }
+        
+        print(f"[ENDPOINT] ✓ Respuesta enviada correctamente")
+        return jsonify(response_data), 200
 
     except Exception as exc:
-        return jsonify({"error": f"Error al procesar la imagen: {exc}"}), 500
+        print(f"[ENDPOINT] ✗ Error en detección: {exc}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Error al procesar la imagen: {str(exc)}"}), 500
 
 
 @app.route("/tumor/predict", methods=["POST"])

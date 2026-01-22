@@ -1,109 +1,133 @@
-# 🔬 Análisis Médico IA - Detección de Emociones y Tumores
+# Unified API - Análisis Médico IA
 
-Backend unificado que combina dos modelos de IA:
-- **Detección de Emociones**: Análisis facial con puntos de referencia usando MediaPipe y FER
-- **Detección de Tumores**: Clasificación y segmentación de MRI cerebrales con TensorFlow
+Sistema integrado para detección de emociones en rostros y análisis de tumores en imágenes MRI.
 
-## Endpoints
+## ✨ Características
 
-### POST `/emotion/upload`
-Detecta emociones en imágenes faciales.
+- **Detección de Emociones**: Análisis de 7 emociones básicas usando FER (Facial Expression Recognition)
+- **Puntos Faciales**: Detección de landmarks faciales usando MediaPipe
+- **Análisis de Tumores MRI**: Clasificación y segmentación de tumores cerebrales
+- **Generación de PDFs**: Reportes automáticos con análisis y visualizaciones
+- **Frontend Web**: Interfaz completa para ambas funcionalidades
 
-**Request:**
-```
-Content-Type: multipart/form-data
-file: <imagen>
-```
+## 🎯 Emociones Detectables
 
-**Response:**
-```json
-{
-  "dominant_emotion": "feliz",
-  "emotions": {"angry": 0.05, "happy": 0.85, ...},
-  "image_with_points_base64": "...",
-  "drive_id": null
-}
-```
+1. Enojado (😠)
+2. Disgustado (🤢)
+3. Miedo (😨)
+4. Feliz (😄)
+5. Triste (😢)
+6. Sorprendido (😲)
+7. Neutral (😐)
 
-### POST `/tumor/predict`
-Analiza MRI para detectar tumores cerebrales.
-
-**Request:**
-```
-Content-Type: multipart/form-data
-data: <imagen_mri>
-```
-
-**Response:**
-PDF con análisis visual (imagen original, máscara, overlay)
-
-## Despliegue en Heroku
-
-### Prerequisitos
-- Heroku CLI instalado
-- Cuenta de Heroku
-- Git configurado
-
-### Pasos
-
-1. **Crear app en Heroku:**
-```bash
-heroku create tu-app-name
-```
-
-2. **Configurar stack a container:**
-```bash
-heroku stack:set container -a tu-app-name
-```
-
-3. **Añadir variables de entorno (opcional - solo si usas Google Drive):**
-```bash
-heroku config:set GOOGLE_DRIVE_CREDENTIALS='{"type": "service_account", ...}' -a tu-app-name
-heroku config:set FOLDER_ID='tu_folder_id' -a tu-app-name
-```
-
-4. **Desplegar:**
-```bash
-git push heroku main
-```
-
-5. **Abrir app:**
-```bash
-heroku open -a tu-app-name
-```
-
-## Variables de Entorno
-
-- `GOOGLE_DRIVE_CREDENTIALS` (opcional): JSON completo de cuenta de servicio para subir emociones a Drive
-- `FOLDER_ID` (opcional): ID de carpeta en Drive donde subir imágenes
-
-Si no se configuran, la app funciona sin Drive (recomendado para comenzar).
-
-## Desarrollo Local
+## 🚀 Instalación
 
 ```bash
+# Crear entorno virtual
+python -m venv venv
+source venv/Scripts/activate  # Windows
+
+# Instalar dependencias
 pip install -r requirements.txt
+```
+
+## 📦 Dependencias Principales
+
+- Flask 2.0.1
+- TensorFlow (CPU)
+- MediaPipe - Landmarks faciales
+- FER - Detección de emociones
+- OpenCV - Visión por computadora
+- ReportLab - Generación de PDFs
+- Pillow - Procesamiento de imágenes
+
+## ▶️ Uso
+
+```bash
 python app.py
 ```
 
-Luego accede a `http://localhost:5000/`
+El servidor estará disponible en `http://localhost:5000`
 
-## Estructura
+## 🔌 Endpoints API
+
+### Detección de Emociones
+- **POST** `/emotion/upload`
+- Parámetro: `file` (imagen)
+- Respuesta: Emoción detectada + puntos faciales en base64
+
+### Análisis de Tumores
+- **POST** `/tumor/predict`
+- Parámetro: `data` (imagen MRI)
+- Respuesta: PDF con análisis, máscara y overlay
+
+### Frontend
+- **GET** `/`
+- Interfaz web interactiva
+
+## 📝 Estructura del Código
 
 ```
-unified-api/
-├── app.py              # Flask app con ambos endpoints
-├── static/
-│   └── index.html      # Frontend unificado
-├── models/             # Modelos descargados en runtime
-├── requirements.txt
-├── Dockerfile
-├── Procfile
-└── README.md
+app.py
+├── Imports y configuración
+├── Funciones de procesamiento
+│   ├── Detección de puntos faciales (MediaPipe + OpenCV)
+│   ├── Detección de emociones (FER)
+│   └── Conversión de imágenes
+├── Carga de modelos (lazy loading)
+└── Rutas y endpoints
 ```
 
-## Notas
+## ⚙️ Configuración
 
-- Los modelos de tumor se descargan automáticamente en el primer arranque (~110 MB)
-- Timeout: 300 segundos para análisis largos
-- Usar dyno Hobby ($7) o superior para evitar OOM
+- Tamaño de imagen emociones: 640x640 (detección) → 300x300 (display)
+- Tamaño de imagen tumores: 128x128 (RGB), 256x256 (escala gris)
+- Umbral tumor: 0.75
+- Umbral segmentación: 0.2
+
+## 📊 Modelos IA
+
+Los modelos se descargan automáticamente en la primera ejecución desde Google Drive:
+
+- `tumor_classifier.h5` - ResNet para clasificación de tumores
+- `segmentacion.keras` - UNet para segmentación
+
+## 🔧 Desarrollo
+
+### Agregar nuevas funcionalidades
+1. Crear función en el archivo principal
+2. Documentar con docstrings
+3. Agregar logs con prefijos `[MODULO]`
+4. Testear antes de hacer commit
+
+### Estructura de logs
+```
+[FER] - Detección de emociones
+[OpenCV] - Fallbacks visuales
+[ENDPOINT] - Rutas Flask
+```
+
+## 📈 Performance
+
+- FER: ~2-3 segundos por rostro
+- Tumor: ~5-10 segundos (descarga de modelos en primera ejecución)
+- Puntos faciales: <1 segundo
+
+## 🐛 Troubleshooting
+
+**No se detectan emociones:**
+- Verificar iluminación de la imagen
+- Asegurar que el rostro esté mirando hacia la cámara
+- Usar imágenes claras sin obstáculos
+
+**Errores con modelos:**
+- Verificar conexión a internet (descarga de modelos)
+- Limpiar caché de gdown si hay corrupción
+
+## 📄 Licencia
+
+Proyecto académico para análisis médico e interpretación de emociones.
+
+## 👥 Autor
+
+Vinyurchin - 2026

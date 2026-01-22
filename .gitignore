@@ -15,3 +15,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+# Modelos de IA (se descargan automáticamente en runtime)
+models/*.h5
+models/*.keras
+models/
