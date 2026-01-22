@@ -271,6 +271,18 @@ _unet_model = None
 _input_layer_patched = False
 
 
+class DTypePolicy:
+    """Mock de DTypePolicy para deserializar modelos antiguos."""
+    def __init__(self, name=None, **kwargs):
+        self.name = name or "float32"
+    
+    def __repr__(self):
+        return f"DTypePolicy(name='{self.name}')"
+    
+    def __call__(self, *args, **kwargs):
+        return self
+
+
 def patch_input_layer_batch_shape():
     """Permite cargar modelos antiguos que usan 'batch_shape' en InputLayer."""
     global _input_layer_patched
@@ -308,10 +320,11 @@ def ensure_models():
         except Exception as e:
             print(f"[Model] Error inicial: {e}")
             try:
-                # Fallback: cargar sin compilar y registrar custom objects
+                # Fallback: cargar con DTypePolicy custom object
                 import keras
-                with keras.utils.custom_object_scope({"DTypePolicy": object}):
+                with keras.utils.custom_object_scope({"DTypePolicy": DTypePolicy}):
                     _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+                print("[Model] ✓ Modelo cargado con custom_object_scope (DTypePolicy)")
             except Exception as e2:
                 print(f"[Model] Error con custom_object_scope: {e2}")
                 raise
@@ -324,10 +337,11 @@ def ensure_models():
         except Exception as e:
             print(f"[Model] Error inicial: {e}")
             try:
-                # Fallback: cargar sin compilar y registrar custom objects
+                # Fallback: cargar con DTypePolicy custom object
                 import keras
-                with keras.utils.custom_object_scope({"DTypePolicy": object}):
+                with keras.utils.custom_object_scope({"DTypePolicy": DTypePolicy}):
                     _unet_model = load_model(SEGMENTATION_PATH, compile=False)
+                print("[Model] ✓ Modelo cargado con custom_object_scope (DTypePolicy)")
             except Exception as e2:
                 print(f"[Model] Error con custom_object_scope: {e2}")
                 raise
