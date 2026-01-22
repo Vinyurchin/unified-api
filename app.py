@@ -275,12 +275,21 @@ class DTypePolicy:
     """Mock de DTypePolicy para deserializar modelos antiguos."""
     def __init__(self, name=None, **kwargs):
         self.name = name or "float32"
+        self.compute_dtype = "float32"
+        self.variable_dtype = "float32"
+        self._is_mixed_precision = False
     
     def __repr__(self):
         return f"DTypePolicy(name='{self.name}')"
     
     def __call__(self, *args, **kwargs):
         return self
+    
+    def __getattr__(self, item):
+        # Retorna un valor por defecto para cualquier atributo que Keras intente acceder
+        if item in ("compute_dtype", "variable_dtype"):
+            return "float32"
+        return None
 
 
 def patch_input_layer_batch_shape():
