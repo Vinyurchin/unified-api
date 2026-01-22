@@ -3,6 +3,10 @@ import io
 import os
 from pathlib import Path
 
+# Environment setup BEFORE importing TensorFlow
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+os.environ["TF_USE_LEGACY_KERAS"] = "True"
+
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageEnhance, ImageDraw
@@ -33,8 +37,6 @@ except Exception:
     FER = None
     _fer_detector_instance = None
 
-# Environment setup
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 load_dotenv()
 
 APP_ROOT = Path(__file__).parent
@@ -297,16 +299,30 @@ def ensure_models():
     if not SEGMENTATION_PATH.exists():
         gdown.download(SEGMENTATION_URL, str(SEGMENTATION_PATH), quiet=False)
     patch_input_layer_batch_shape()
+    
     if _resnet_model is None:
         print("[Model] Cargando tumor_classifier.h5...")
-        _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+        try:
+            from tensorflow.keras.utils import custom_object_scope
+            with custom_object_scope({}):
+                _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+        except Exception as e:
+            print(f"[Model] Error al cargar con custom_object_scope: {e}")
+            _resnet_model = load_model(CLASSIFIER_PATH, compile=False)
+    
     if _unet_model is None:
         print("[Model] Cargando segmentacion.keras...")
         try:
-            _unet_model = load_model(SEGMENTATION_PATH, compile=False, safe_mode=False)
+            from tensorflow.keras.utils import custom_object_scope
+            with custom_object_scope({}):
+                _unet_model = load_model(SEGMENTATION_PATH, compile=False)
         except Exception as e:
-            print(f"[Model] Error con safe_mode=False, intentando sin ese parámetro: {e}")
-            _unet_model = load_model(SEGMENTATION_PATH, compile=False)
+            print(f"[Model] Error al cargar con custom_object_scope: {e}")
+            try:
+                _unet_model = load_model(SEGMENTATION_PATH, compile=False, safe_mode=False)
+            except Exception as e2:
+                print(f"[Model] Error con safe_mode=False: {e2}")
+                _unet_model = load_model(SEGMENTATION_PATH, compile=False)
 
 
 # ----- Routes -----

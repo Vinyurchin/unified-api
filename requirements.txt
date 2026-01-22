@@ -3,7 +3,7 @@ flask-cors
 opencv-python-headless
 mediapipe
 Werkzeug==2.3.0
-numpy>=1.22
+numpy>=1.22,<1.25
 gunicorn==21.0.0
 requests
 python-dotenv
@@ -11,7 +11,7 @@ fer
 imageio
 imageio-ffmpeg
 Pillow
-tensorflow-cpu==2.13.0
+tensorflow-cpu==2.12.0
 gdown
 reportlab
 
