@@ -323,39 +323,13 @@ def ensure_models():
     
     if _resnet_model is None:
         print("[Model] Cargando tumor_classifier.h5...")
-        try:
-            # Intenta cargar directamente con safe_mode=False para bypass de validaciones
-            _resnet_model = load_model(str(CLASSIFIER_PATH), compile=False, safe_mode=False)
-            print("[Model] ✓ Modelo cargado exitosamente")
-        except Exception as e:
-            print(f"[Model] Error con safe_mode=False: {e}")
-            try:
-                # Fallback: cargar con DTypePolicy custom object
-                import keras
-                with keras.utils.custom_object_scope({"DTypePolicy": DTypePolicy}):
-                    _resnet_model = load_model(str(CLASSIFIER_PATH), compile=False)
-                print("[Model] ✓ Modelo cargado con custom_object_scope (DTypePolicy)")
-            except Exception as e2:
-                print(f"[Model] Error con custom_object_scope: {e2}")
-                raise
+        _resnet_model = load_model(str(CLASSIFIER_PATH), compile=False)
+        print("[Model] ✓ ResNet cargado exitosamente")
     
     if _unet_model is None:
         print("[Model] Cargando segmentacion.keras...")
-        try:
-            # Intenta cargar directamente con safe_mode=False para bypass de validaciones
-            _unet_model = load_model(str(SEGMENTATION_PATH), compile=False, safe_mode=False)
-            print("[Model] ✓ Modelo cargado exitosamente")
-        except Exception as e:
-            print(f"[Model] Error con safe_mode=False: {e}")
-            try:
-                # Fallback: cargar con DTypePolicy custom object
-                import keras
-                with keras.utils.custom_object_scope({"DTypePolicy": DTypePolicy}):
-                    _unet_model = load_model(str(SEGMENTATION_PATH), compile=False)
-                print("[Model] ✓ Modelo cargado con custom_object_scope (DTypePolicy)")
-            except Exception as e2:
-                print(f"[Model] Error con custom_object_scope: {e2}")
-                raise
+        _unet_model = load_model(str(SEGMENTATION_PATH), compile=False)
+        print("[Model] ✓ UNet cargado exitosamente")
 
 
 # ----- Routes -----
